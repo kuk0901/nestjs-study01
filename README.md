@@ -2,7 +2,7 @@
 
 - Nest Js 소개
 
-- CRUD 앱 구성하며 NEST JS 기본 구성 배우기
+- CRUD 앱 구성하며 Nest JS 기본 구성 배우기
 
 - PG DB & TypeORM 이용해서 앱 구성
 
@@ -13,3 +13,7 @@
 - 로그 남기기
 
 <br />
+
+## 이론
+
+- section 별로 md 디렉토리에서 확인
