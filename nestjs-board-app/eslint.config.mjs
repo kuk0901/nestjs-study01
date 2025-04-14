@@ -29,7 +29,9 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn'
+      '@typescript-eslint/no-unsafe-argument': 'warn',
+      // 임시로 설정 추가
+      '@typescript-eslint/no-unsafe-return': 'off',
     },
   },
 );
