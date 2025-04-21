@@ -438,18 +438,349 @@ export class UserRepository extends Repository<User> {
 
 ## JWT에 대해서
 
+- JWT(JSON Web Token)
+
+  - 정보를 JSON 객체로 안전하게 전송하기 위한 컴팩트하고 독립적인 방식을 정의하는 개방형 표준
+
+  - 정보를 안정하게 전할 때 혹은 유저의 권한 같은 것을 확인하기 위해서 사용하는데 유용한 모듈
+
+  - Header: 토큰에 대한 메타 데이터를 포함 -> 타입, 해싱 알고리즘
+
+  - Payload: 유저 정보(issuer), 만료 기간(expiration time), 주제(subject) 등
+
+  - Verify Signature: 위조 확인, 헤더 및 페이로드 세그먼트 / 서명 알고리즘 / 비밀 키를 사용하여 생성
+
+<br />
+
+- JWT 사용 흐름
+
+  ```
+  유저 로그인 -> 토큰 생성 -> 토큰 보관
+
+  1. 요청을 보낼 때 보관하고 있던 Token을 Header에 넣어 같이 보냄
+
+  2. 서버에서는 JWT를 이용해 Token을 다시 생성한 후 두 개를 비교
+
+  3. 통과일 경우 이후 요청에 대한 작업 진행
+
+  > 요청에서 같이온 header랑 payload를 가져와 서버 안에 갖고 있는 비밀 키를 이용해
+    signature 부분을 다시 생성, 일치하면 통과
+  ```
+
 <br />
 
 ## JWT를 이용해서 토큰 생성하기
+
+- 필요 모듈 설치
+
+  - nestjs/jwt: NestJS에서 jwt를 사용하기 위해 필요한 모듈
+
+  - @nestjs/passport: NestJS에서 passport 사용하기 위해 필요한 모듈
+
+  - passport: passport 모듈
+
+  - passport-jwt: jwt 모듈
+
+  ```shell
+  $ npm i -D nestjs/jwt @nestjs/passport passport passport-jwt
+  ```
+
+<br />
+
+- 애플리케이션에 JWT 모듈 등록
+
+  - AuthModule에 추가
+
+  ```ts
+  import { Module } from "@nestjs/common";
+  import { AuthController } from "./auth.controller";
+  import { AuthService } from "./auth.service";
+  import { UserRepository } from "./user.repository";
+  import { JwtModule } from "@nestjs/jwt";
+
+  @Module({
+    imports: [
+      JwtModule.register({
+        secret: "Secret1234", // 토큰을 만들 때 이용하는 Secret Key
+        signOptions: {
+          expiresIn: 60 * 60 // 토큰의 유효기간 (1시간)
+        }
+      })
+    ],
+    controllers: [AuthController],
+    providers: [AuthService, UserRepository]
+  })
+  export class AuthModule {}
+  ```
+
+<br />
+
+- 애플리케이션에 Passport 모듈 등록
+
+  - AuthModule에 추가
+
+  ```ts
+  import { Module } from "@nestjs/common";
+  import { AuthController } from "./auth.controller";
+  import { AuthService } from "./auth.service";
+  import { UserRepository } from "./user.repository";
+  import { JwtModule } from "@nestjs/jwt";
+  import { PassportModule } from "@nestjs/passport";
+
+  @Module({
+    imports: [
+      PassportModule.register({ defaultStrategy: "jwt" }), // Passport 모듈을 사용하여 JWT 설정
+      JwtModule.register({
+        secret: "Secret1234", // 토큰을 만들 때 이용하는 Secret Key
+        signOptions: {
+          expiresIn: 60 * 60 // 토큰의 유효기간 (1시간)
+        }
+      })
+    ],
+    controllers: [AuthController],
+    providers: [AuthService, UserRepository]
+  })
+  export class AuthModule {}
+  ```
+
+<br />
+
+- 로그인 성공 시 JWT를 이용해서 토큰 생성
+
+  1. Service에서 SignIn 메서드에 토큰 생성 로직 추가 -> AuthModule에 JWT를 등록했기 때문에 가져올 수 있음
+
+  2. Token을 만드려면 Secret과 Payload가 필요
+
+  ```ts
+  @Injectable()
+  export class AuthService {
+    constructor(
+      @InjectRepository(UserRepository)
+      private readonly userRepository: UserRepository,
+      private readonly jwtService: JwtService
+    ) {}
+
+    async signUp(authCredentialsDto: AuthCredentialsDto): Promise<void> {
+      return this.userRepository.createUser(authCredentialsDto);
+    }
+
+    async signIn(
+      authCredentialsDto: AuthCredentialsDto
+    ): Promise<{ accessToken: string }> {
+      const { username, password } = authCredentialsDto;
+      const user = await this.userRepository.findOne({ where: { username } });
+
+      if (user && (await bcrypt.compare(password, user.password))) {
+        // 유저 토큰 생성 (Secret + Payload)
+        const payload = { username };
+        const accessToken = this.jwtService.sign(payload);
+
+        return { accessToken };
+      } else {
+        throw new UnauthorizedException("login failed");
+      }
+    }
+  }
+  ```
 
 <br />
 
 ## Passport, JWT 이용해서 토큰 인증 후 유저 정보 가져오기
 
+- 토큰을 포함해 요청을 보낼 때 유효한지 확인 후 payload 안에 들어있는 username을 이용해 DB에 있는 유저인지 확인
+
+  - 데이터가 있는 경우 유저 객체 반환, 없는 경우 에러 반환
+
+  - @types/passport-jwt 모듈 설치: passport-jwt 모듈을 위한 타입 정의 모듈
+
+  > Passport를 사용해 과정 처리
+
+  1. jwt.strategy.ts 파일 생성: 등록된 인증 전략(Strategy)
+
+  ```ts
+  // auth/jwt.strategy.ts
+
+  // JWT를 생성할 때 넣는 값의 구조와 동일 형태의 interface 작성
+  interface JwtPayload {
+    username: string;
+  }
+
+  @Injectable()
+  export class JwtStrategy extends PassportStrategy(Strategy) {
+    constructor(
+      @InjectRepository(UserRepository)
+      private readonly userRepository: UserRepository
+    ) {
+      super({
+        secretOrKey: "Secret1234", // JWT를 검증할 때 사용할 Secret Key
+        jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken() // Bearer Token에서 JWT를 추출하는 방법
+      });
+    }
+
+    async validate(payload: JwtPayload): Promise<User> {
+      const { username }: { username: string } = payload;
+      // payload에 담긴 username으로 DB에서 사용자 정보를 조회
+      const user: User | null = await this.userRepository.findOne({
+        where: { username }
+      });
+
+      // 사용자가 존재하지 않으면 UnauthorizedException을 던짐
+      if (!user) throw new UnauthorizedException();
+
+      // 사용자가 존재하면 해당 사용자 정보를 반환
+      return user;
+    }
+  }
+  ```
+
+  2. JwtStrategy를 사용하기 위해 AuthModule Providers 항목에 추가, exports 항목에 추가
+
+  ```ts
+  // auth/auth.module.ts
+  @Module({
+    imports: [
+      PassportModule.register({ defaultStrategy: "jwt" }), // Passport 모듈을 사용하여 JWT 설정
+      JwtModule.register({
+        secret: "Secret1234", // 토큰을 만들 때 이용하는 Secret Key
+        signOptions: {
+          expiresIn: 60 * 60 // 토큰의 유효기간 (1시간)
+        }
+      })
+    ],
+    controllers: [AuthController],
+    providers: [AuthService, UserRepository, JwtStrategy],
+    exports: [JwtModule, PassportModule]
+  })
+  export class AuthModule {}
+  ```
+
+<br />
+
+- 요청 안에 유저 정보(유저 객체)가 들어가게 하는 방법
+
+  - UseGuards: @nestjs/passport에서 가져온 AuthGuard()를 이용해 오청 안에 유저 정보를 넣음
+
+  ```ts
+  // auth/auth.controller.ts
+  import { Body, Controller, Post, Req, UseGuards } from "@nestjs/common";
+  import { AuthService } from "./auth.service";
+  import { AuthGuard } from "@nestjs/passport";
+
+  @Controller("auth")
+  export class AuthController {
+    constructor(private readonly authService: AuthService) {}
+
+    @Post("/test")
+    @UseGuards(AuthGuard())
+    test(@Req() req: any) {
+      console.log("req", req);
+    }
+  }
+  ```
+
+<br />
+
+- NestJS의 Middleware
+
+  - Pipes: 요청 유효성 검사 및 페이로드 변환을 위해 만들어짐, 데이터를 예상한대로 직렬화함
+
+  - Filters: 오류 처리 미들웨어 -> 특정 오류 처리기를 사용할 경로와 각 경로 주변의 복잡성을 관리하는 방법을 알 수 있음
+
+  - Guards: 인증 미들웨어 -> 지정된 경로로 통과할 수 있는 사람과 허용되지 않는 사람을 서버에 알려줌
+
+  - Interceptors: 응답 매핑 및 캐시 관리와 함께 요청 로깅과 같은 전후 미들웨어 -> 각 요청 전후에 실행됨
+
 <br />
 
 ## 커스텀 데코레이터 생성하기
 
+- req.user가 아닌 바로 user 파라미터를 가져오는 방법
+
+  - 커스텀 데코레이터 이용
+
+  ```ts
+  // auth/get-user.decorator.ts
+  import { createParamDecorator, ExecutionContext } from "@nestjs/common";
+  import { User } from "./user.entity";
+
+  export const GetUser = createParamDecorator(
+    (data: unknown, context: ExecutionContext) => {
+      const request = context.switchToHttp().getRequest();
+      return request.user as User;
+    }
+  );
+  ```
+
+  ```ts
+  // auth/auth.controller.ts
+  import {
+    Body,
+    Controller,
+    Post,
+    UseGuards,
+    ValidationPipe
+  } from "@nestjs/common";
+  import { AuthService } from "./auth.service";
+  import { AuthGuard } from "@nestjs/passport";
+  import { GetUser } from "./get-user.decorator";
+  import { User } from "./user.entity";
+
+  @Controller("auth")
+  export class AuthController {
+    constructor(private readonly authService: AuthService) {}
+
+    @Post("/test")
+    @UseGuards(AuthGuard())
+    test(@GetUser() user: User) {
+      console.log("user", user);
+    }
+  }
+  ```
+
 <br />
 
 ## 인증된 유저만 게시물 보고 쓸 수 있게 설정하기
+
+- 유저에게 게시물 접근 권한 주기
+
+  1. board module에서 인증 모듈 import
+
+  ```ts
+  // board/board.module.ts
+  import { Module } from "@nestjs/common";
+  import { BoardsController } from "./boards.controller";
+  import { BoardsService } from "./boards.service";
+  import { BoardRepository } from "./board.repository";
+  import { AuthModule } from "src/auth/auth.module";
+
+  @Module({
+    imports: [AuthModule],
+    controllers: [BoardsController],
+    providers: [BoardsService, BoardRepository]
+  })
+  export class BoardsModule {}
+  ```
+
+  <br />
+
+  2. UseGuards(AuthGuard())를 이용해서 토큰 검사 후에 게시물 접근 권한을 전달
+
+     - 컨트롤러 레벨로 설정해 모든 라우트에 적용
+
+  ```ts
+  import { Body, Controller, Get, UseGuards } from "@nestjs/common";
+  import { BoardsService } from "./boards.service";
+  import { Board } from "./board.entity";
+  import { AuthGuard } from "@nestjs/passport";
+
+  @Controller("boards")
+  @UseGuards(AuthGuard())
+  export class BoardsController {
+    constructor(private readonly boardsService: BoardsService) {}
+
+    @Get("/")
+    getAllBoards(): Promise<Board[]> {
+      return this.boardsService.getAllBoards();
+    }
+  }
+  ```
