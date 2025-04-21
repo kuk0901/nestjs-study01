@@ -442,7 +442,7 @@ export class UserRepository extends Repository<User> {
 
   - 정보를 JSON 객체로 안전하게 전송하기 위한 컴팩트하고 독립적인 방식을 정의하는 개방형 표준
 
-  - 정보를 안정하게 전할 때 혹은 유저의 권한 같은 것을 확인하기 위해서 사용하는데 유용한 모듈
+  - 정보를 안정하게 전할 때 혹은 유저의 권한 같은 것을 확인하기 위해서 사용하는 데 유용한 모듈
 
   - Header: 토큰에 대한 메타 데이터를 포함 -> 타입, 해싱 알고리즘
 
@@ -463,7 +463,7 @@ export class UserRepository extends Repository<User> {
 
   3. 통과일 경우 이후 요청에 대한 작업 진행
 
-  > 요청에서 같이온 header랑 payload를 가져와 서버 안에 갖고 있는 비밀 키를 이용해
+  > 요청에서 같이 온 header랑 payload를 가져와 서버 안에 갖고 있는 비밀 키를 이용해
     signature 부분을 다시 생성, 일치하면 통과
   ```
 
@@ -549,7 +549,7 @@ export class UserRepository extends Repository<User> {
 
   1. Service에서 SignIn 메서드에 토큰 생성 로직 추가 -> AuthModule에 JWT를 등록했기 때문에 가져올 수 있음
 
-  2. Token을 만드려면 Secret과 Payload가 필요
+  2. Token을 만들려면 Secret과 Payload가 필요
 
   ```ts
   @Injectable()
@@ -682,7 +682,7 @@ export class UserRepository extends Repository<User> {
 
 - NestJS의 Middleware
 
-  - Pipes: 요청 유효성 검사 및 페이로드 변환을 위해 만들어짐, 데이터를 예상한대로 직렬화함
+  - Pipes: 요청 유효성 검사 및 페이로드 변환을 위해 만들어짐, 데이터를 예상한 대로 직렬화함
 
   - Filters: 오류 처리 미들웨어 -> 특정 오류 처리기를 사용할 경로와 각 경로 주변의 복잡성을 관리하는 방법을 알 수 있음
 

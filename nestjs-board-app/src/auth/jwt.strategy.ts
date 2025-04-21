@@ -4,6 +4,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { UserRepository } from './user.repository';
 import { User } from './user.entity';
+import config from 'config';
+
+const jwtConfig = config.get<{ secret: string; expiresIn: number }>('jwt');
 
 // JWT를 생성할 때 넣는 값의 구조와 동일 형태의 interface 작성
 interface JwtPayload {
@@ -17,7 +20,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly userRepository: UserRepository,
   ) {
     super({
-      secretOrKey: 'Secret1234', // JWT를 검증할 때 사용할 Secret Key
+      secretOrKey: process.env.JWT_SECRET ?? jwtConfig.secret,
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), // Bearer Token에서 JWT를 추출하는 방법
     });
   }
